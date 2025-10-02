@@ -1,11 +1,11 @@
-import { ColorSchemeToggle } from '../components/ColorSchemeToggle/ColorSchemeToggle';
+import SignInWithGoogle from '../components/Auth/SignInWithGoogle';
 import { Welcome } from '../components/Welcome/Welcome';
 
 export default function HomePage() {
   return (
     <>
       <Welcome />
-      <ColorSchemeToggle />
+      <SignInWithGoogle />
     </>
   );
 }

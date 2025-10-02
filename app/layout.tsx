@@ -3,6 +3,10 @@ import '@mantine/core/styles.css';
 import React from 'react';
 import { ColorSchemeScript, mantineHtmlProps, MantineProvider } from '@mantine/core';
 import { theme } from '../theme';
+import { AuthProvider } from '../context/AuthContext';
+import { QueueProvider } from '../context/QueueContext';
+import AppFrame from '../components/AppFrame/AppFrame';
+import { FilamentsProvider } from '../context/FilamentsContext';
 
 export const metadata = {
   title: 'Mantine Next.js template',
@@ -22,7 +26,15 @@ export default function RootLayout({ children }: { children: any }) {
       </head>
       <body>
         <MantineProvider theme={theme} defaultColorScheme="auto">
-            {children}
+          <AuthProvider>
+            <FilamentsProvider>
+              <QueueProvider>
+                <AppFrame>
+                  {children}
+                </AppFrame>
+              </QueueProvider>
+            </FilamentsProvider>
+          </AuthProvider>
         </MantineProvider>
       </body>
     </html>
