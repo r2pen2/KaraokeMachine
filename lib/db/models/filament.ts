@@ -4,7 +4,7 @@ export enum SpecialColor {
 
 export type HexColor = `#${string}`;
 
-export type FilamentType = 'normal' | 'multicolor' | 'silk' | 'matte' | 'speed';
+export type FilamentType = 'normal' | 'multicolor' | 'silk' | 'matte' | 'speed' | 'particle';
 
 /**
  * Describes a filament available to the user.
@@ -24,8 +24,10 @@ export type Filament = {
   pricePerKilo: number;
   numSpoolsOwned: number;
   totalUsed: number;
-  /** Optional owner uid for access control */
-  ownerUid?: string;
+  /** Owner uid for access control */
+  ownerUid: string;
+  /** If true, hidden from lists but preserved in DB (default false) */
+  hidden: boolean;
 };
 
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { appendUserFilament, getFilamentsByIds, readUser, createFilamentDoc, updateFilamentOwnedCount } from '../lib/db/firestore';
+import { appendUserFilament, getFilamentsByIds, readUser, createFilamentDoc, updateFilamentOwnedCount, hideFilament, updateFilamentDoc } from '../lib/db/firestore';
 import type { Filament } from '../lib/db/models/filament';
 
 type FilamentsContextValue = {
@@ -10,6 +10,9 @@ type FilamentsContextValue = {
   refresh: () => Promise<void>;
   createFilament: (f: Omit<Filament, 'id'>) => Promise<string>;
   updateOwned: (id: string, owned: number) => Promise<void>;
+  softDelete: (id: string) => Promise<void>;
+  updateFilament: (id: string, updates: Partial<Filament>) => Promise<void>;
+  duplicateFilament: (id: string) => Promise<string | null>;
 };
 
 const FilamentsContext = createContext<FilamentsContextValue | undefined>(undefined);
@@ -28,12 +31,13 @@ export function FilamentsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { refresh(); }, [user]);
 
   const createFilament = async (f: Omit<Filament, 'id'>) => {
-    const payload = user ? { ...f, ownerUid: user.uid } : f;
-    const id = await createFilamentDoc(payload as Omit<Filament, 'id'>);
+    if (!user) { throw new Error('Not signed in'); }
+    const payload: Omit<Filament, 'id'> = { ...f, ownerUid: user.uid, hidden: false } as Omit<Filament, 'id'>;
+    const id = await createFilamentDoc(payload);
     if (user) {
       await appendUserFilament(user.uid, id);
     }
-    setFilaments((prev) => [...prev, { ...payload, id } as Filament]);
+    setFilaments((prev) => [...prev, { ...(payload as Filament), id }]);
     return id;
   };
 
@@ -42,7 +46,27 @@ export function FilamentsProvider({ children }: { children: React.ReactNode }) {
     await updateFilamentOwnedCount(id, owned);
   };
 
-  const value = useMemo(() => ({ filaments, refresh, createFilament, updateOwned }), [filaments]);
+  const softDelete = async (id: string) => {
+    setFilaments((prev) => prev.filter((x) => x.id !== id));
+    await hideFilament(id);
+  };
+
+  const updateFilament = async (id: string, updates: Partial<Filament>) => {
+    setFilaments((prev) => prev.map((x) => (x.id === id ? { ...x, ...updates } : x)));
+    await updateFilamentDoc(id, updates);
+  };
+
+  const duplicateFilament = async (id: string) => {
+    const f = filaments.find((x) => x.id === id);
+    if (!f) { return null; }
+    const { id: _ignored, ownerUid, hidden, ...rest } = f as any;
+    const newId = await createFilamentDoc({ ...(rest as any), ownerUid, hidden: false });
+    setFilaments((prev) => [...prev, { ...(f as any), id: newId, hidden: false }]);
+    if (user) { await appendUserFilament(user.uid, newId); }
+    return newId;
+  };
+
+  const value = useMemo(() => ({ filaments, refresh, createFilament, updateOwned, softDelete, updateFilament, duplicateFilament }), [filaments]);
 
   return <FilamentsContext.Provider value={value}>{children}</FilamentsContext.Provider>;
 }

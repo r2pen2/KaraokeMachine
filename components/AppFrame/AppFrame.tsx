@@ -7,26 +7,45 @@ import {
   Avatar,
   Burger,
   Button,
+  Divider,
   Group,
   NavLink,
   ScrollArea,
   Stack,
   Text,
+  ActionIcon,
 } from '@mantine/core';
-import { IconFilter } from '@tabler/icons-react';
+import { IconFilter, IconPlus, IconPackage, IconShoppingCart, IconPencil } from '@tabler/icons-react';
+import AddProductModal from '../Products/AddProductModal';
 import { useAuth } from '../../context/AuthContext';
 import SignInWithGoogle from '../Auth/SignInWithGoogle';
-import { getAllProducts } from '../../lib/mockDb';
+import { useProducts } from '../../context/ProductsContext';
 
-const PRODUCT_HEADERS = getAllProducts();
 
 export default function AppFrame({ children }: { children: React.ReactNode }) {
   const [mobileOpened, setMobileOpened] = useState(false);
   const [desktopOpened, setDesktopOpened] = useState(true);
-  const [productsOpened, setProductsOpened] = useState(true);
   const { user, signOut } = useAuth();
 
-  const products = useMemo(() => PRODUCT_HEADERS, []);
+  const { products: userProducts } = useProducts();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<typeof userProducts[number] | undefined>(undefined);
+  const products = useMemo(() => userProducts.filter((p) => !p.hidden).sort((a, b) => a.title.localeCompare(b.title)), [userProducts]);
+
+  function handleAddProduct() {
+    setEditingProduct(undefined);
+    setAddOpen(true);
+  }
+
+  function handleEditProduct(product: typeof userProducts[number]) {
+    setEditingProduct(product);
+    setAddOpen(true);
+  }
+
+  function handleCloseProductModal() {
+    setAddOpen(false);
+    setEditingProduct(undefined);
+  }
 
   return (
     <AppShell
@@ -40,7 +59,10 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
             <Burger opened={mobileOpened} onClick={() => setMobileOpened((o) => !o)} hiddenFrom="sm" size="sm" />
             <Burger opened={desktopOpened} onClick={() => setDesktopOpened((o) => !o)} visibleFrom="sm" size="sm" />
           </Group>
-          <Group>
+          <Group gap="sm">
+            <ActionIcon variant="subtle" onClick={handleAddProduct} title="Add Product">
+              <IconPlus size={18} />
+            </ActionIcon>
             {user ? (
               <Group gap="sm">
                 <Avatar src={user.photoURL || undefined} radius="xl" size={28}>
@@ -59,32 +81,50 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
       </AppShell.Header>
 
       <AppShell.Navbar p="sm">
-        <AppShell.Section component={ScrollArea} grow>
-          <Stack gap="xs">
-            <NavLink
-              component={Link}
-              href="/filaments"
-              label="Filaments"
-              leftSection={<IconFilter size={16} />}
-            />
-
-            <NavLink
-              label="Products"
-              defaultOpened
-              opened={productsOpened}
-              onChange={(o) => setProductsOpened(Boolean(o))}
-            >
+        <Stack gap="xs" style={{ height: '100%' }}>
+          <NavLink
+            component={Link}
+            href="/orders"
+            label="Orders"
+            leftSection={<IconShoppingCart size={16} />}
+          />
+          <NavLink
+            component={Link}
+            href="/filaments"
+            label="Filaments"
+            leftSection={<IconFilter size={16} />}
+          />
+          <Divider label="Products" labelPosition="center" my="xs" />
+          <ScrollArea style={{ flex: 1 }}>
+            <Stack gap={4}>
               {products.map((p) => (
                 <NavLink
                   key={p.id}
                   component={Link}
                   href={`/products/${p.id}`}
                   label={p.title}
+                  leftSection={p.sketchDataUrl ? (
+                    <img src={p.sketchDataUrl} alt="icon" style={{ width: 24, height: 24 }} />
+                  ) : <IconPackage size={16} />}
+                  rightSection={
+                    <ActionIcon
+                      variant="subtle"
+                      size="xs"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleEditProduct(p);
+                      }}
+                    >
+                      <IconPencil size={12} />
+                    </ActionIcon>
+                  }
                 />
               ))}
-            </NavLink>
-          </Stack>
-        </AppShell.Section>
+            </Stack>
+          </ScrollArea>
+        </Stack>
+        <AddProductModal opened={addOpen} onClose={handleCloseProductModal} product={editingProduct} />
       </AppShell.Navbar>
 
       <AppShell.Main>{children}</AppShell.Main>

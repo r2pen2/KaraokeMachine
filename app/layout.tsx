@@ -7,6 +7,8 @@ import { AuthProvider } from '../context/AuthContext';
 import { QueueProvider } from '../context/QueueContext';
 import AppFrame from '../components/AppFrame/AppFrame';
 import { FilamentsProvider } from '../context/FilamentsContext';
+import { ProductsProvider } from '../context/ProductsContext';
+import { OrdersProvider } from '../context/OrdersContext';
 
 export const metadata = {
   title: 'Mantine Next.js template',
@@ -27,13 +29,17 @@ export default function RootLayout({ children }: { children: any }) {
       <body>
         <MantineProvider theme={theme} defaultColorScheme="auto">
           <AuthProvider>
-            <FilamentsProvider>
-              <QueueProvider>
-                <AppFrame>
-                  {children}
-                </AppFrame>
-              </QueueProvider>
-            </FilamentsProvider>
+            <ProductsProvider>
+              <FilamentsProvider>
+                <OrdersProvider>
+                  <QueueProvider>
+                    <AppFrame>
+                      {children}
+                    </AppFrame>
+                  </QueueProvider>
+                </OrdersProvider>
+              </FilamentsProvider>
+            </ProductsProvider>
           </AuthProvider>
         </MantineProvider>
       </body>

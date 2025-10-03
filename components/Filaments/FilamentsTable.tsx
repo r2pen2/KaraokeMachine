@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Badge, Center, Group, NumberInput, Paper, Table, Text, UnstyledButton } from '@mantine/core';
-import { buildTightLinearGradient, pickBadgeTextColor } from '../../lib/color';
+import { Group, NumberInput, Paper, Table, Text, UnstyledButton, ActionIcon, Tooltip, Modal, Button, Center } from '@mantine/core';
+import FilamentBadge from './FilamentBadge';
 import { useFilaments } from '../../context/FilamentsContext';
-import { Filament, SpecialColor } from '../../lib/db/models/filament';
-import { IconChevronDown, IconChevronUp, IconSelector } from '@tabler/icons-react';
+import { Filament } from '../../lib/db/models/filament';
+import AddFilamentModal from './AddFilamentModal';
+import { IconChevronDown, IconChevronUp, IconSelector, IconTrash, IconExternalLink, IconPencil, IconCopy } from '@tabler/icons-react';
 
 type SortKey = 'title' | 'brand' | 'pricePerKilo' | 'numSpoolsOwned' | 'totalUsed';
 
@@ -26,41 +27,6 @@ function HeaderSortButton({ label, sorted, reversed, onClick }: { label: string;
   );
 }
 
-function ColorBadge({ colors, types }: { colors: Filament['colors']; types: Filament['types'] }) {
-  if (colors.length === 0) { return null; }
-  const isRainbow = colors.includes(SpecialColor.Rainbow);
-  const baseStyle: React.CSSProperties = { width: 120, paddingInline: 12, border: 'none', outline: 'none', boxShadow: 'none' };
-  if (isRainbow) {
-    baseStyle.background = 'linear-gradient(90deg, red 0%, orange 16.66%, yellow 33.33%, green 50%, blue 66.66%, indigo 83.33%, violet 100%)';
-  } else if (colors.length === 1) {
-    baseStyle.backgroundColor = colors[0] as string;
-  } else {
-    baseStyle.background = buildTightLinearGradient(colors as string[]);
-  }
-  // Silk effect: subtle glow border
-  if (types.includes('silk')) {
-    baseStyle.boxShadow = '0 0 6px 2px rgba(255,255,255,0.6), 0 0 12px rgba(255,255,255,0.35)';
-    baseStyle.border = '1px solid rgba(255,255,255,0.85)';
-  }
-  // Matte effect: single horizontal strike-through line centered
-  if (types.includes('matte')) {
-    const base = baseStyle.background ? String(baseStyle.background) : `linear-gradient(0deg, ${String(baseStyle.backgroundColor)}, ${String(baseStyle.backgroundColor)})`;
-    const seed = isRainbow ? '#ff0000' : (colors[0] as string);
-    const textColor = pickBadgeTextColor(seed);
-    const isDarkBg = textColor === 'white';
-    const lineColor = isDarkBg ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.20)';
-    const thickness = '0.14rem';
-    // Line layer first (on top), base layer second; centered; no repeat
-    baseStyle.backgroundImage = `linear-gradient(to bottom, transparent 0, transparent calc(50% - ${thickness}), ${lineColor} calc(50% - ${thickness}), ${lineColor} calc(50% + ${thickness}), transparent calc(50% + ${thickness}), transparent 100%), ${base}`;
-    baseStyle.backgroundSize = `auto, auto`;
-    baseStyle.backgroundPosition = 'center, center';
-    baseStyle.backgroundRepeat = 'no-repeat, no-repeat';
-    delete (baseStyle as any).background;
-    delete (baseStyle as any).backgroundColor;
-  }
-  return <Badge variant="filled" style={baseStyle} />;
-}
-
 function sortFilaments(data: Filament[], sortBy: SortKey, reversed: boolean) {
   const sorted = [...data].sort((a, b) => {
     const av = a[sortBy];
@@ -78,13 +44,15 @@ function sortFilaments(data: Filament[], sortBy: SortKey, reversed: boolean) {
  * Owned is editable via NumberInput; future PR can persist changes to user DB.
  */
 export default function FilamentsTable() {
-  const { filaments, updateOwned } = useFilaments();
+  const { filaments, updateOwned, softDelete, duplicateFilament } = useFilaments();
   const [sortBy, setSortBy] = useState<SortKey>('title');
   const [reversed, setReversed] = useState(false);
   const [ownedById, setOwnedById] = useState<Record<string, number>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const rows = useMemo(() => {
-    const data = filaments.map((f) => ({ ...f, numSpoolsOwned: ownedById[f.id] ?? f.numSpoolsOwned }));
+    const data = filaments.filter((f) => !f.hidden).map((f) => ({ ...f, numSpoolsOwned: ownedById[f.id] ?? f.numSpoolsOwned }));
     const sorted = sortFilaments(data, sortBy, reversed);
     return sorted.map((f) => (
       <Table.Tr key={f.id}>
@@ -92,7 +60,7 @@ export default function FilamentsTable() {
         <Table.Td>{f.brand}</Table.Td>
         <Table.Td>
           <Group gap={6} wrap="wrap">
-            <ColorBadge colors={f.colors} types={f.types} />
+            <FilamentBadge colors={f.colors as any} types={f.types as any} />
           </Group>
         </Table.Td>
         <Table.Td>{f.types.join(', ')}</Table.Td>
@@ -102,9 +70,28 @@ export default function FilamentsTable() {
         </Table.Td>
         <Table.Td>{f.totalUsed.toFixed(2)} kg</Table.Td>
         <Table.Td>
-          <Text component="a" href={f.href} target="_blank" rel="noreferrer" c="blue.6">
-            Link
-          </Text>
+          <Group gap={6}>
+            <Tooltip label="Open link">
+              <ActionIcon variant="subtle" component="a" href={f.href} target="_blank" rel="noreferrer">
+                <IconExternalLink size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Edit">
+              <ActionIcon variant="subtle" onClick={() => setEditing(f.id)}>
+                <IconPencil size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Duplicate">
+              <ActionIcon variant="subtle" onClick={() => duplicateFilament(f.id)}>
+                <IconCopy size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Hide filament">
+              <ActionIcon color="red" variant="subtle" onClick={() => setPendingDelete(f.id)}>
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Table.Td>
       </Table.Tr>
     ));
@@ -129,12 +116,19 @@ export default function FilamentsTable() {
       <Table.Th>
         <HeaderSortButton label="Used" sorted={sortBy === 'totalUsed'} reversed={reversed} onClick={() => { setReversed(sortBy === 'totalUsed' ? !reversed : false); setSortBy('totalUsed'); }} />
       </Table.Th>
-      <Table.Th>Store</Table.Th>
+      <Table.Th>ACTIONS</Table.Th>
     </Table.Tr>
   );
 
   return (
     <Paper withBorder>
+      <Modal opened={!!pendingDelete} onClose={() => setPendingDelete(null)} title="Hide filament?" centered>
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button color="red" onClick={() => { if (pendingDelete) { softDelete(pendingDelete); setPendingDelete(null); } }}>Hide</Button>
+        </Group>
+      </Modal>
+      <AddFilamentModal opened={!!editing} onClose={() => setEditing(null)} filament={filaments.find((x) => x.id === editing) || null} />
       <Table striped highlightOnHover>
         <Table.Thead>{header}</Table.Thead>
         <Table.Tbody>{rows}</Table.Tbody>
